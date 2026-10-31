@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spelling Bee Camp</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--ink:#fff7e6;--amber:#ffb703;--pine:#1b3a2f;--card:rgba(15,28,22,.88);font-family:ui-rounded,"Trebuchet MS",system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#10201a;color:var(--ink)}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:.7em 1.1em;background:var(--amber);color:#2b1a00;font-weight:700}
+button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+button.alt{background:#2f5d4a;color:var(--ink)}button:disabled{opacity:.5;cursor:default}
+input{font:inherit;padding:.7em;border-radius:12px;border:2px solid #4b7a64;background:#0d1a15;color:var(--ink);width:100%}
+.hide{display:none!important}
+#home{max-width:460px;margin:0 auto;padding:20px;display:grid;gap:14px}
+h1{margin:.2em 0 0;font-size:2rem}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.av{font-size:2rem;background:#1d3a2e;padding:6px 10px;border-radius:14px}.av.on,.opt.on{outline:3px solid var(--amber)}
+.opt{background:#1d3a2e;color:var(--ink);flex:1}
+#err{color:#ff8a80;min-height:1.2em;margin:0}
+.scene{height:100%;display:flex;flex-direction:column;position:relative;overflow:hidden;
+ background:linear-gradient(var(--a) 0 42%,var(--b) 42% 100%)}
+.camping{--a:#14213d;--b:#2d6a4f}.cave{--a:#2b2d42;--b:#4a4e69}.forest{--a:#52b788;--b:#1b4332}.cabin{--a:#9c6644;--b:#5c3d2e}
+.deco{position:absolute;font-size:2rem;opacity:.85;pointer-events:none}
+#bar{display:flex;justify-content:space-between;gap:8px;padding:8px 12px;background:var(--card);z-index:2;align-items:center;flex-wrap:wrap}
+#owner{text-align:center;padding-top:10px;z-index:1}
+#owner .big{font-size:4.2rem;line-height:1;filter:drop-shadow(0 4px 0 rgba(0,0,0,.3))}
+.tag{display:inline-block;background:var(--card);padding:2px 10px;border-radius:99px;font-size:.85rem}
+#bubble{margin:6px auto;max-width:420px;background:#fff7e6;color:#2b1a00;border-radius:16px;padding:8px 14px;font-weight:700;z-index:1;text-align:center}
+#crowd{flex:1;overflow:auto;display:grid;gap:4px;padding:8px;align-content:end;z-index:1}
+.pl{text-align:center;font-size:.7rem;min-width:0}
+.pl .e{font-size:1.9rem;display:block;transition:transform .3s}
+.pl.me .e{filter:drop-shadow(0 0 6px var(--amber))}
+.pl b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl.done::after{content:"✓";color:#9ef01a;font-weight:900}
+#panel{background:var(--card);padding:12px;z-index:2;display:grid;gap:8px}
+.big-btn{font-size:1.1rem;padding:.9em}
+.res{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+#ban{position:fixed;inset:0;background:#000d;display:grid;place-items:center;text-align:center;padding:20px;z-index:9}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="home">
+  <h1>🐝 Spelling Bee Camp</h1>
+  <p style="margin:0">Pick your avatar and name, then join a server or host your own.</p>
+  <div class="row" id="avs"></div>
+  <input id="name" maxlength="14" placeholder="Your name" autocomplete="off">
+  <input id="code" maxlength="5" placeholder="Server code" autocomplete="off" style="text-transform:uppercase">
+  <button class="big-btn" id="join">Join server</button>
+  <button class="alt big-btn" id="mk">Create my own server</button>
+  <div id="mkopts" class="hide" style="display:grid;gap:8px">
+    <b>Background</b>
+    <div class="row" id="bgs"></div>
+    <b>Voice that says the words</b>
+    <div class="row" id="vos"></div>
+    <button class="big-btn" id="create">Start server</button>
+  </div>
+  <p id="err" role="alert"></p>
+</div>
+
+<div id="game" class="scene hide">
+  <div id="bar"><span id="info"></span><button class="alt" id="qrbtn">Code / QR</button></div>
+  <div id="owner"><div class="big" id="oav"></div><span class="tag" id="onm"></span></div>
+  <div id="bubble"></div>
+  <div id="crowd"></div>
+  <div id="panel"></div>
+</div>
+<div id="ban" class="hide"><div><h2>You're banned for now</h2><p id="banmsg"></p><p>Time left: <b id="bantime"></b></p></div></div>
+<div id="qr" class="hide" style="position:fixed;inset:0;background:#000b;display:grid;place-items:center;z-index:8">
+  <div style="background:#fff;color:#000;padding:20px;border-radius:16px;text-align:center">
+    <div id="qrimg" style="display:inline-block"></div><h2 id="qrcode" style="margin:.3em"></h2>
+    <p style="margin:0 0 10px">Scan with a phone camera, or type the code.</p><button id="qrx">Close</button>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const h=(t,c,...k)=>{const e=document.createElement(t);if(c)e.className=c;k.flat().forEach(x=>e.append(x));return e};
+const btn=(t,fn,c)=>{const e=h('button',c,t);e.onclick=fn;return e};
+const AV=['🐻','🦊','🐸','🐼','🦉','🐯','🐰','🐵','🦁','🐧','🐙','🦄'];
+const BG={camping:'⛺ Camping',cave:'🦇 Cave',forest:'🌲 Forest',cabin:'🏠 Cozy cabin'};
+const DECO={camping:'🌙 ⭐ 🔥 🌲 ⛺ ⭐'.split(' '),cave:'🦇 💎 🪨 🕸️ 🔦 💎'.split(' '),forest:'🌳 🌲 🍄 🦋 🌿 🌳'.split(' '),cabin:'🪵 🕯️ 🖼️ 🔥 🧸 🪟'.split(' ')};
+const tok=localStorage.sbTok||(localStorage.sbTok=Math.random().toString(36).slice(2));
+let av=AV[0],bg='forest',vo='female',ws,S=null,word='',panelKey='',sceneBg='',heard=false;
+
+// ---- picker UI
+function pick(box,items,get,set,cur){box.replaceChildren(...items.map(i=>{const b=btn(get(i),()=>{set(i);[...box.children].forEach(c=>c.classList.remove('on'));b.classList.add('on')},box.id==='avs'?'av':'opt');if(i===cur)b.classList.add('on');return b}))}
+pick($('#avs'),AV,x=>x,x=>av=x,av);
+pick($('#bgs'),Object.keys(BG),k=>BG[k],k=>bg=k,bg);
+pick($('#vos'),['female','male'],k=>k==='female'?'👩 Female voice':'👨 Male voice',k=>vo=k,vo);
+const qc=new URLSearchParams(location.search).get('code');if(qc)$('#code').value=qc.toUpperCase();
+$('#mk').onclick=()=>$('#mkopts').classList.toggle('hide');
+$('#join').onclick=()=>connect({t:'join',code:$('#code').value});
+$('#create').onclick=()=>connect({t:'create',bg,voice:vo});
+
+// ---- ban (also remembered in this browser)
+function showBan(ms,why){localStorage.sbBan=Date.now()+ms;$('#banmsg').textContent=why||'';$('#ban').classList.remove('hide');
+ const t=setInterval(()=>{const l=localStorage.sbBan-Date.now();if(l<=0){clearInterval(t);$('#ban').classList.add('hide');return}
+ $('#bantime').textContent=Math.floor(l/60000)+':'+String(Math.floor(l/1000)%60).padStart(2,'0')},500)}
+if(localStorage.sbBan>Date.now())showBan(localStorage.sbBan-Date.now(),'Please come back later.');
+
+function connect(msg){
+ if(localStorage.sbBan>Date.now())return showBan(localStorage.sbBan-Date.now());
+ $('#err').textContent='';
+ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+ ws.onopen=()=>ws.send(JSON.stringify({...msg,name:$('#name').value,avatar:av,tok}));
+ ws.onmessage=e=>on(JSON.parse(e.data));
+ ws.onclose=()=>{if(S){alert('Disconnected from the server.');location.href=location.pathname}};
+ ws.onerror=()=>$('#err').textContent='Could not reach the server.';
+}
+const tx=o=>ws.send(JSON.stringify(o));
+function on(m){
+ if(m.t==='err'){$('#err').textContent=m.msg;ws.close()}
+ else if(m.t==='banned'){ws.close();showBan(m.ms,m.why)}
+ else if(m.t==='closed'){alert('The owner closed this server.');location.href=location.pathname}
+ else if(m.t==='say'){word=m.word;speak(m.word,m.voice)}
+ else if(m.t==='state'){S=m;render()}
+}
+
+// ---- voice (owner picks male or female)
+function speak(w,voice){
+ if(!window.speechSynthesis)return;speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(w);u.rate=.8;u.lang='en-US';
+ const re=voice==='female'?/female|woman|zira|samantha|karen|victoria|susan|hazel|aria|jenny/i:/\bmale\b|david|daniel|alex|fred|mark|george|guy|ryan/i;
+ const v=speechSynthesis.getVoices().filter(x=>x.lang.startsWith('en')).find(x=>re.test(x.name));
+ if(v)u.voice=v;u.pitch=v?1:(voice==='female'?1.5:.6);speechSynthesis.speak(u);
+}
+
+// ---- QR
+$('#qrbtn').onclick=()=>{if(!S)return;$('#qrimg').replaceChildren();
+ new QRCode($('#qrimg'),{text:location.origin+location.pathname+'?code='+S.code,width:180,height:180});
+ $('#qrcode').textContent=S.code;$('#qr').classList.remove('hide')};
+$('#qrx').onclick=()=>$('#qr').classList.add('hide');
+
+// ---- render
+function render(){
+ $('#home').classList.add('hide');$('#game').classList.remove('hide');
+ const g=$('#game'),isHost=S.host.id===S.you,me=S.players.find(p=>p.id===S.you);
+ if(sceneBg!==S.bg){sceneBg=S.bg;g.className='scene '+S.bg;g.querySelectorAll('.deco').forEach(e=>e.remove());
+  DECO[S.bg].forEach((d,i)=>{const e=h('span','deco',d);e.style.left=(8+i*17)%92+'%';e.style.top=(i%2?4:14)+(i*7%20)+'%';g.append(e)})}
+ $('#info').textContent=`${BG[S.bg]} · ${S.code} · ${S.players.length+1}/${S.max} · Round ${S.round||'-'}`;
+ $('#oav').textContent=S.host.avatar;$('#onm').textContent='👑 '+S.host.name;
+ // players sit in rows facing the owner at the front, each tilted toward the centre
+ const cols=innerWidth<600?6:9,c=$('#crowd');c.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+ c.replaceChildren(...S.players.map((p,i)=>{const col=i%cols,e=h('span','e',p.avatar);e.style.transform=`rotate(${((cols-1)/2-col)*5}deg)`;
+  return h('div','pl'+(p.id===S.you?' me':'')+(p.done&&S.phase==='spelling'?' done':''),e,h('b','',p.name),h('span','',p.score+' pts'))}));
+ const done=S.players.filter(p=>p.done).length;
+ const say={lobby:isHost?'Share the code, then start when everyone is here.':'Waiting for the owner to start…',
+  choosing:isHost?'Pick one of your 3 secret words.':'The owner is choosing a word…',
+  spelling:isHost?'Players are spelling. Only you can see the word.':'Listen, then spell the word. You get one try!',
+  reveal:'The word was “'+(S.reveal?S.reveal.word:'')+'”'}[S.phase];
+ $('#bubble').textContent=say;
+ const key=[S.phase,S.round,isHost,me&&me.done].join();
+ if(key!==panelKey){panelKey=key;const p=$('#panel');p.replaceChildren();
+  if(isHost){
+   if(S.phase==='lobby'||S.phase==='reveal'){
+    if(S.phase==='reveal')p.append(results());
+    p.append(btn(S.phase==='lobby'?'Start round 1':'Next round (3 new words)',()=>tx({t:'start'}),'big-btn'))}
+   else if(S.phase==='choosing')S.words.forEach((w,i)=>p.append(btn(w,()=>tx({t:'pick',i}),'big-btn')));
+   else{const n=h('b');n.id='cnt';p.append(h('div','',h('b','','Word: '+S.word),' · answered ',n));
+    p.append(h('div','row',btn('🔊 Repeat',()=>tx({t:'repeat'}),'alt'),btn('End round',()=>tx({t:'end'}))))}
+  }else if(S.phase==='spelling'){
+   if(me&&me.done)p.append(h('div','','🔒 Answer locked in. Waiting for others…'),btn('🔊 Hear again',()=>speak(word,S.voice),'alt'));
+   else{const i=h('input');Object.assign(i,{placeholder:'Type your spelling',autocomplete:'off'});
+    i.setAttribute('autocorrect','off');i.setAttribute('autocapitalize','off');i.spellcheck=false;
+    const go=()=>{if(i.value.trim())tx({t:'answer',text:i.value})};i.onkeydown=e=>e.key==='Enter'&&go();
+    p.append(i,h('div','row',btn('Submit (one chance!)',go),btn('🔊 Hear again',()=>speak(word,S.voice),'alt')));setTimeout(()=>i.focus(),50)}
+  }else if(S.phase==='reveal')p.append(results());
+  else p.append(h('div','','Get ready…'));
+ }
+ const cn=$('#cnt');if(cn)cn.textContent=done+'/'+S.players.length;
+}
+function results(){
+ const mine=S.reveal.list.find(r=>r.id===S.you),top=[...S.players].sort((a,b)=>b.score-a.score).slice(0,5);
+ return h('div','',
+  mine?h('div','res',h('b','','You: '+mine.ans),h('b','',mine.pts+' pts')):'',
+  h('b','','Leaderboard'),...top.map((p,i)=>h('div','res',h('span','',(i+1)+'. '+p.avatar+' '+p.name),h('span','',p.score))));
+}
+</script>
+</body>
+</html>
